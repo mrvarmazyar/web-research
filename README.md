@@ -1,6 +1,6 @@
 # web-research
 
-Web research CLI for Claude Code. Combines [TinyFish](https://tinyfish.ai) web search with [Groq](https://console.groq.com) (Llama 3.1) summarization into a single fast binary.
+Web research CLI for AI coding agents (Claude Code, Codex). Combines [TinyFish](https://tinyfish.ai) web search with [Groq](https://console.groq.com) (Llama 3.1) summarization into a single fast binary.
 
 **Pipeline:** search → fetch → summarize → answer
 
@@ -102,7 +102,9 @@ wr research "query"
 
 **Groq fallback:** if `GROQ_API_KEY` is unset, returns truncated raw markdown instead of a summary.
 
-## Claude Code Integration
+## AI Agent Integration
+
+### Claude Code
 
 This repo includes a `SKILL.md` for Claude Code. Symlink it into your skills directory:
 
@@ -124,6 +126,38 @@ Skip for: GitHub repos/issues (use gh CLI), Jira/Confluence (use MCP tools), int
 ```
 
 Claude will automatically use `wr` instead of native `WebSearch`/`WebFetch`.
+
+### OpenAI Codex
+
+Create `~/.codex/web-research.md`:
+
+```markdown
+# Web Research
+
+For all web searches and URL fetching, use the `wr` CLI instead of built-in search tools.
+
+## Commands
+
+\`\`\`bash
+wr research "<query>"       # search + fetch top 3 + summarize (preferred)
+wr search "<query>"         # search only → URLs + snippets
+wr fetch "<url>" "<prompt>" # fetch single URL + summarize
+\`\`\`
+
+## When to Use
+- Any research task, finding docs, "search for X", "look up X"
+- Fetching any public documentation URL
+
+## When to Skip
+- GitHub repos/issues/PRs → use `gh` CLI
+- Internal/authenticated URLs → use curl directly
+```
+
+Then reference it from `~/.codex/AGENTS.md`:
+
+```markdown
+@/Users/yourname/.codex/web-research.md
+```
 
 ## Dependencies
 
