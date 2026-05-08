@@ -51,7 +51,7 @@ All configured. Try: wr research "your query here"
 
 ## Usage
 
-### `wr research` — full pipeline (recommended)
+### `wr research`: full pipeline (recommended)
 
 Searches, fetches top 3 results, summarizes each with Groq.
 
@@ -61,7 +61,7 @@ wr research "tailwind v4 migration breaking changes"
 wr research "next-intl v4 RTL Arabic configuration"
 ```
 
-### `wr search` — search only
+### `wr search`: search only
 
 Returns titles, snippets, and URLs. Useful when you just need to find the right page.
 
@@ -70,7 +70,7 @@ wr search "golang http middleware pattern"
 wr search "postgres JSONB index performance"
 ```
 
-### `wr fetch` — fetch and summarize a URL
+### `wr fetch`: fetch and summarize a URL
 
 Fetches a URL, converts HTML to markdown, summarizes with Groq.
 
