@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
 	"github.com/mrvarmazyar/web-research/internal/fetch"
@@ -29,6 +32,8 @@ func main() {
 		cmdResearch(strings.Join(os.Args[2:], " "))
 	case "setup":
 		cmdSetup()
+	case "bench":
+		cmdBench(os.Args[2:])
 	default:
 		usage()
 		os.Exit(1)
@@ -94,6 +99,134 @@ func cmdResearch(query string) {
 	}
 }
 
+var defaultBenchTargets = []struct{ url, prompt string }{
+	{"https://nextjs.org/docs/app/building-your-application/routing/middleware", "locale prefix matching"},
+	{"https://docs.stripe.com/webhooks", "signature verification best practices"},
+	{"https://next-intl.dev/docs/routing/configuration", "localePrefix always options"},
+}
+
+func cmdBench(args []string) {
+	type row struct {
+		url      string
+		rawHTML  int
+		rawMD    int
+		wrOut    int
+		fetchErr error
+	}
+
+	targets := defaultBenchTargets
+	// Allow custom URL: wr bench <url> <prompt>
+	if len(args) >= 2 {
+		targets = []struct{ url, prompt string }{{args[0], strings.Join(args[1:], " ")}}
+	}
+
+	fmt.Fprintf(os.Stderr, "Running benchmark on %d URL(s)...\n\n", len(targets))
+
+	rows := make([]row, 0, len(targets))
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	for _, t := range targets {
+		r := row{url: t.url}
+
+		// 1. Raw HTML size
+		req, _ := http.NewRequest("GET", t.url, nil)
+		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; wr-bench/1.0)")
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			r.fetchErr = err
+			rows = append(rows, r)
+			continue
+		}
+		rawBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+		resp.Body.Close()
+		r.rawHTML = len(rawBytes)
+
+		// 2. Raw markdown (fetch without Groq)
+		mdContent, err := fetch.Fetch(t.url)
+		if err != nil {
+			r.fetchErr = err
+			rows = append(rows, r)
+			continue
+		}
+		_ = cache.Set(t.url, mdContent)
+		r.rawMD = len(mdContent)
+
+		// 3. wr output (fetch + Groq summary)
+		summary, _ := summarize.Summarize(mdContent, t.prompt)
+		r.wrOut = len(summary)
+
+		rows = append(rows, r)
+	}
+
+	// Print table
+	sep := strings.Repeat("─", 100)
+	fmt.Printf("%-42s  %10s  %10s  %10s  %8s  %8s\n",
+		"URL", "Raw HTML", "Raw MD", "wr output", "vs HTML", "vs MD")
+	fmt.Println(sep)
+
+	var totalHTML, totalMD, totalWR int
+	for _, r := range rows {
+		short := r.url
+		if len(short) > 42 {
+			short = short[:39] + "..."
+		}
+		if r.fetchErr != nil {
+			fmt.Printf("%-42s  ERROR: %v\n", short, r.fetchErr)
+			continue
+		}
+		savHTML := pct(r.wrOut, r.rawHTML)
+		savMD := pct(r.wrOut, r.rawMD)
+		fmt.Printf("%-42s  %10s  %10s  %10s  %7.1f%%  %7.1f%%\n",
+			short,
+			humanBytes(r.rawHTML),
+			humanBytes(r.rawMD),
+			humanBytes(r.wrOut),
+			savHTML,
+			savMD,
+		)
+		totalHTML += r.rawHTML
+		totalMD += r.rawMD
+		totalWR += r.wrOut
+	}
+
+	fmt.Println(sep)
+	fmt.Printf("%-42s  %10s  %10s  %10s  %7.1f%%  %7.1f%%\n",
+		"TOTAL",
+		humanBytes(totalHTML),
+		humanBytes(totalMD),
+		humanBytes(totalWR),
+		pct(totalWR, totalHTML),
+		pct(totalWR, totalMD),
+	)
+
+	fmt.Printf("\n≈ tokens (chars ÷ 4):\n")
+	fmt.Printf("  Raw HTML:  %d tokens\n", totalHTML/4)
+	fmt.Printf("  Raw MD:    %d tokens\n", totalMD/4)
+	fmt.Printf("  wr output: %d tokens\n", totalWR/4)
+	fmt.Printf("  Saved vs raw MD:   ~%d tokens (%.1f%%)\n",
+		(totalMD-totalWR)/4, pct(totalWR, totalMD))
+	fmt.Printf("  Saved vs raw HTML: ~%d tokens (%.1f%%)\n",
+		(totalHTML-totalWR)/4, pct(totalWR, totalHTML))
+}
+
+func pct(out, in int) float64 {
+	if in == 0 {
+		return 0
+	}
+	return (1 - float64(out)/float64(in)) * 100
+}
+
+func humanBytes(b int) string {
+	switch {
+	case b >= 1024*1024:
+		return fmt.Sprintf("%.1f MB", float64(b)/1024/1024)
+	case b >= 1024:
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
+}
+
 func cmdSetup() {
 	type check struct {
 		key  string
@@ -140,6 +273,8 @@ COMMANDS
   wr fetch <url> <prompt>    Fetch URL and summarize with Groq
   wr research <query>        Search + fetch top 3 + summarize
   wr setup                   Check env var configuration
+  wr bench                   Measure token savings vs raw HTML/MD
+  wr bench <url> <prompt>    Benchmark a specific URL
 
 ENV VARS
   TINYFISH_API_KEY    Web search  (tinyfish.ai, free)
