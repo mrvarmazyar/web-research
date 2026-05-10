@@ -1,8 +1,20 @@
 # web-research
 
-Web research CLI for AI coding agents (Claude Code, Codex). Combines [TinyFish](https://tinyfish.ai) web search with [Groq](https://console.groq.com) (Llama 3.1) summarization into a single fast binary.
+Token-efficient web research for AI agents.
 
-**Pipeline:** search → fetch → summarize → answer
+Combines [TinyFish](https://tinyfish.ai) web search with [Groq](https://console.groq.com) (Llama 3.1) summarization. Use it as a CLI or as an MCP server.
+
+Instead of dumping raw HTML, scripts, navbars, ads, and cookie banners into model context, it returns clean focused summaries with sources.
+
+```
+AI Agent / MCP Client
+        ↓
+wr-mcp (or wr CLI)
+        ↓
+search + fetch + clean + summarize + cache
+        ↓
+clean context with sources
+```
 
 ## Why
 
@@ -18,6 +30,7 @@ Web research CLI for AI coding agents (Claude Code, Codex). Combines [TinyFish](
 git clone https://github.com/mrvarmazyar/web-research
 cd web-research
 go build -o ~/.local/bin/wr ./cmd/wr
+go build -o ~/.local/bin/wr-mcp ./cmd/wr-mcp
 ```
 
 Make sure `~/.local/bin` is in your PATH:
@@ -101,6 +114,18 @@ wr research "query"
 **Cache** is keyed by URL SHA-256, stored at `~/.cache/web-research/`, expires after `WR_CACHE_DAYS` days.
 
 **Groq fallback:** if `GROQ_API_KEY` is unset, returns truncated raw markdown instead of a summary.
+
+## MCP Server
+
+`wr-mcp` exposes web-research as MCP tools for Claude Desktop, Cursor, Codex, and any MCP-compatible client.
+
+| Tool | Purpose |
+|------|---------|
+| `web_search` | Search the web, return clean results |
+| `web_fetch` | Fetch one URL and summarize it |
+| `web_research` | Search + fetch top pages + synthesized answer with sources |
+
+See [docs/mcp.md](docs/mcp.md) for client config examples (Claude Desktop, Cursor, generic).
 
 ## AI Agent Integration
 
