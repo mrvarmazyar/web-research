@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,9 +11,11 @@ import (
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
 	"github.com/mrvarmazyar/web-research/internal/fetch"
-	"github.com/mrvarmazyar/web-research/internal/search"
+	"github.com/mrvarmazyar/web-research/internal/research"
 	"github.com/mrvarmazyar/web-research/internal/summarize"
 )
+
+var svc = research.NewService()
 
 func main() {
 	if len(os.Args) < 2 {
@@ -41,61 +44,34 @@ func main() {
 }
 
 func cmdSearch(query string) {
-	results, err := search.Search(query)
+	resp, err := svc.Search(context.Background(), research.SearchRequest{Query: query})
 	if err != nil {
 		fatalf("search: %v", err)
 	}
-	for _, r := range results {
-		fmt.Printf("%d. [%s] %s\n   %s\n   %s\n\n", r.Position, r.SiteName, r.Title, r.Snippet, r.URL)
+	for i, r := range resp.Results {
+		fmt.Printf("%d. [%s]\n   %s\n   %s\n\n", i+1, r.Title, r.Snippet, r.URL)
 	}
 }
 
 func cmdFetch(url, prompt string) {
-	if cached, ok := cache.Get(url); ok {
-		printSummary(cached, prompt)
-		return
-	}
-	content, err := fetch.Fetch(url)
+	resp, err := svc.Fetch(context.Background(), research.FetchRequest{URL: url, Prompt: prompt})
 	if err != nil {
 		fatalf("fetch: %v", err)
 	}
-	_ = cache.Set(url, content)
-	printSummary(content, prompt)
+	fmt.Println(resp.Summary)
 }
 
 func cmdResearch(query string) {
 	fmt.Fprintf(os.Stderr, "→ searching: %s\n\n", query)
-	results, err := search.Search(query)
+	resp, err := svc.Research(context.Background(), research.ResearchRequest{Query: query})
 	if err != nil {
-		fatalf("search: %v", err)
+		fatalf("research: %v", err)
 	}
 
-	limit := min(3, len(results))
-	fmt.Fprintf(os.Stderr, "→ fetching top %d results\n\n", limit)
-
-	for i := 0; i < limit; i++ {
-		r := results[i]
-		fmt.Printf("## %d. %s\n%s\n\n", i+1, r.Title, r.URL)
-
-		var content string
-		if cached, ok := cache.Get(r.URL); ok {
-			content = cached
-		} else {
-			content, err = fetch.Fetch(r.URL)
-			if err != nil {
-				fmt.Printf("(fetch failed: %v)\n\n", err)
-				continue
-			}
-			_ = cache.Set(r.URL, content)
-		}
-
-		summary, err := summarize.Summarize(content, query)
-		if err != nil {
-			fmt.Println(truncate(content, 500))
-		} else {
-			fmt.Println(summary)
-		}
-		fmt.Println()
+	fmt.Println(resp.Answer)
+	fmt.Printf("\n## Sources (%d fetched, %d cache hits)\n", resp.Stats.FetchedPages, resp.Stats.CacheHits)
+	for i, src := range resp.Sources {
+		fmt.Printf("%d. %s\n   %s\n\n", i+1, src.Title, src.URL)
 	}
 }
 
