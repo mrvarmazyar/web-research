@@ -24,7 +24,7 @@ clean context with sources
 
 ## Install
 
-**Prerequisites:** Go 1.22+
+**Prerequisites:** Go 1.25+
 
 ```bash
 git clone https://github.com/mrvarmazyar/web-research
@@ -91,6 +91,30 @@ Fetches a URL, converts HTML to markdown, summarizes with Groq.
 wr fetch "https://nextjs.org/docs/app/building-your-application/routing/middleware" "how to match locale prefixes"
 wr fetch "https://docs.stripe.com/webhooks" "signature verification best practices"
 ```
+
+## Token Reduction Benchmark
+
+```
+wr bench
+```
+
+```
+URL                                           Raw HTML      Raw MD   wr output   vs HTML     vs MD
+────────────────────────────────────────────────────────────────────────────────────────────────────
+https://nextjs.org/docs/...                     1.2 MB     29.4 KB       760 B     99.9%     97.5%
+https://docs.stripe.com/webhooks                1.4 MB     39.3 KB      11.8 KB     99.2%     70.0%
+https://next-intl.dev/docs/...                202.5 KB     24.2 KB      11.8 KB     94.2%     51.3%
+────────────────────────────────────────────────────────────────────────────────────────────────────
+TOTAL                                           2.9 MB     92.8 KB      24.3 KB     99.2%     73.8%
+```
+
+Token estimates (chars / 4):
+
+| Method | Tokens | Reduction vs HTML |
+|--------|--------|-------------------|
+| Raw HTML | 747,388 | — |
+| Raw Markdown | 23,767 | 96.8% |
+| `wr` output | 6,221 | **99.2%** |
 
 ## How It Works
 
