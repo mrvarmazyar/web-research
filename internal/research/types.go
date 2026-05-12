@@ -17,16 +17,18 @@ type SearchResponse struct {
 }
 
 type FetchRequest struct {
-	URL    string `json:"url"`
-	Prompt string `json:"prompt,omitempty"`
+	URL      string `json:"url"`
+	Prompt   string `json:"prompt,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
 }
 
 type FetchResponse struct {
-	URL                string `json:"url"`
-	Summary            string `json:"summary"`
-	CacheHit           bool   `json:"cache_hit"`
-	SourceLengthChars  int    `json:"source_length_chars,omitempty"`
-	SummaryLengthChars int    `json:"summary_length_chars,omitempty"`
+	URL                string      `json:"url"`
+	Summary            string      `json:"summary"`
+	CacheHit           bool        `json:"cache_hit"`
+	SourceLengthChars  int         `json:"source_length_chars,omitempty"`
+	SummaryLengthChars int         `json:"summary_length_chars,omitempty"`
 	TokenStats         *TokenStats `json:"token_stats,omitempty"`
 }
 
@@ -34,6 +36,8 @@ type ResearchRequest struct {
 	Query      string `json:"query"`
 	MaxResults int    `json:"max_results,omitempty"`
 	Focus      string `json:"focus,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
 }
 
 type SourceSummary struct {

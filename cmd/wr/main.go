@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -23,20 +24,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	args := os.Args[2:]
+	opts, remaining, err := parseSummaryOptions(args)
+	if err != nil {
+		fatalf("options: %v", err)
+	}
+
 	switch os.Args[1] {
 	case "search":
-		requireArgs(3, "wr search <query>")
-		cmdSearch(strings.Join(os.Args[2:], " "))
+		requireMinArgs(remaining, 1, "wr search <query>")
+		cmdSearch(strings.Join(remaining, " "))
 	case "fetch":
-		requireArgs(4, "wr fetch <url> <prompt>")
-		cmdFetch(os.Args[2], strings.Join(os.Args[3:], " "))
+		requireMinArgs(remaining, 2, "wr fetch [--provider groq|copilot] [--model MODEL] <url> <prompt>")
+		cmdFetch(remaining[0], strings.Join(remaining[1:], " "), opts)
 	case "research":
-		requireArgs(3, "wr research <query>")
-		cmdResearch(strings.Join(os.Args[2:], " "))
+		requireMinArgs(remaining, 1, "wr research [--provider groq|copilot] [--model MODEL] <query>")
+		cmdResearch(strings.Join(remaining, " "), opts)
 	case "setup":
-		cmdSetup()
+		cmdSetup(opts)
 	case "bench":
-		cmdBench(os.Args[2:])
+		cmdBench(remaining, opts)
 	default:
 		usage()
 		os.Exit(1)
@@ -53,17 +60,17 @@ func cmdSearch(query string) {
 	}
 }
 
-func cmdFetch(url, prompt string) {
-	resp, err := svc.Fetch(context.Background(), research.FetchRequest{URL: url, Prompt: prompt})
+func cmdFetch(url, prompt string, opts summaryOptions) {
+	resp, err := svc.Fetch(context.Background(), research.FetchRequest{URL: url, Prompt: prompt, Provider: opts.Provider, Model: opts.Model})
 	if err != nil {
 		fatalf("fetch: %v", err)
 	}
 	fmt.Println(resp.Summary)
 }
 
-func cmdResearch(query string) {
+func cmdResearch(query string, opts summaryOptions) {
 	fmt.Fprintf(os.Stderr, "→ searching: %s\n\n", query)
-	resp, err := svc.Research(context.Background(), research.ResearchRequest{Query: query})
+	resp, err := svc.Research(context.Background(), research.ResearchRequest{Query: query, Provider: opts.Provider, Model: opts.Model})
 	if err != nil {
 		fatalf("research: %v", err)
 	}
@@ -81,7 +88,7 @@ var defaultBenchTargets = []struct{ url, prompt string }{
 	{"https://next-intl.dev/docs/routing/configuration", "localePrefix always options"},
 }
 
-func cmdBench(args []string) {
+func cmdBench(args []string, opts summaryOptions) {
 	type row struct {
 		url      string
 		rawHTML  int
@@ -127,8 +134,8 @@ func cmdBench(args []string) {
 		_ = cache.Set(t.url, mdContent)
 		r.rawMD = len(mdContent)
 
-		// 3. wr output (fetch + Groq summary)
-		summary, _ := summarize.Summarize(mdContent, t.prompt)
+		// 3. wr output (fetch + configured summarizer)
+		summary, _ := summarize.Summarize(context.Background(), mdContent, t.prompt, summarize.Options{Provider: opts.Provider, Model: opts.Model})
 		r.wrOut = len(summary)
 
 		rows = append(rows, r)
@@ -203,25 +210,53 @@ func humanBytes(b int) string {
 	}
 }
 
-func cmdSetup() {
+func cmdSetup(opts summaryOptions) {
 	type check struct {
 		key  string
 		hint string
 	}
+	resolved := summarize.ResolveOptions(summarize.Options{Provider: opts.Provider, Model: opts.Model})
+	if err := summarize.ValidateProvider(resolved.Provider); err != nil {
+		fatalf("setup: %v", err)
+	}
 	checks := []check{
 		{"TINYFISH_API_KEY", "https://agent.tinyfish.ai → Settings → API Keys"},
-		{"GROQ_API_KEY", "https://console.groq.com → API Keys (free tier available)"},
+	}
+	switch resolved.Provider {
+	case summarize.ProviderCopilot:
+		checks = append(checks,
+			check{"COPILOT_CLI", "Install the standalone `copilot` CLI so `wr` can invoke it"},
+		)
+	case summarize.ProviderGroq:
+		checks = append(checks,
+			check{"GROQ_API_KEY", "https://console.groq.com → API Keys (free tier available)"},
+		)
 	}
 
 	allOk := true
 	for _, c := range checks {
-		if os.Getenv(c.key) == "" {
+		if !hasConfiguredValue(c.key) {
 			fmt.Printf("MISSING  %s\n         %s\n\n", c.key, c.hint)
 			allOk = false
 		} else {
 			fmt.Printf("OK       %s\n", c.key)
 		}
 	}
+	if resolved.Provider == summarize.ProviderCopilot {
+		switch {
+		case hasConfiguredValue("COPILOT_ENV_AUTH"):
+			fmt.Printf("OK       COPILOT_AUTH\n")
+		case hasConfiguredValue("COPILOT_CLI"):
+			fmt.Printf("INFO     COPILOT_AUTH\n         No token env vars detected. If you've already run `copilot login`, that may still work; the login session cannot be verified non-interactively.\n")
+		default:
+			fmt.Printf("MISSING  COPILOT_AUTH\n         Authenticate with `copilot login` or export COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN\n\n")
+			allOk = false
+		}
+	}
+	if resolved.Model != "" {
+		fmt.Printf("OK       summarizer model = %s\n", resolved.Model)
+	}
+	fmt.Printf("OK       summarizer provider = %s\n", resolved.Provider)
 
 	fmt.Println()
 	if allOk {
@@ -231,43 +266,67 @@ func cmdSetup() {
 	}
 }
 
-func printSummary(content, prompt string) {
-	summary, err := summarize.Summarize(content, prompt)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "warning: summarize failed, showing raw content")
-		fmt.Println(truncate(content, 3000))
-		return
-	}
-	fmt.Println(summary)
-}
-
 func usage() {
 	fmt.Print(`wr — web research CLI
 
 COMMANDS
   wr search <query>          Search web via tinyfish
-  wr fetch <url> <prompt>    Fetch URL and summarize with Groq
-  wr research <query>        Search + fetch top 3 + summarize
-  wr setup                   Check env var configuration
-  wr bench                   Measure token savings vs raw HTML/MD
-  wr bench <url> <prompt>    Benchmark a specific URL
+  wr fetch [--provider groq|copilot] [--model MODEL] <url> <prompt>
+                            Fetch URL and summarize with chosen provider
+  wr research [--provider groq|copilot] [--model MODEL] <query>
+                            Search + fetch top 3 + summarize
+  wr setup [--provider groq|copilot] [--model MODEL]
+                            Check env var configuration
+  wr bench [--provider groq|copilot] [--model MODEL]
+                            Measure token savings vs raw HTML/MD
+  wr bench [--provider groq|copilot] [--model MODEL] <url> <prompt>
+                            Benchmark a specific URL
 
 ENV VARS
   TINYFISH_API_KEY    Web search  (tinyfish.ai, free)
-  GROQ_API_KEY        Summarizer  (console.groq.com, free)
+  WR_SUMMARIZER_PROVIDER  Summarizer provider default (groq|copilot)
+  WR_SUMMARIZER_MODEL     Summarizer model override
+  GROQ_API_KEY            Groq summarizer key
+  COPILOT_MODEL           Copilot model default
+  COPILOT_GITHUB_TOKEN    Copilot auth token (or use copilot login / GH_TOKEN / GITHUB_TOKEN)
   WR_CACHE_DAYS       Cache TTL in days (default: 7)
 
 EXAMPLES
   wr search "next.js middleware locale redirect"
-  wr fetch https://nextjs.org/docs/app/building-your-application/routing/middleware "how to match locale paths"
-  wr research "stripe webhook idempotency best practices"
+  wr fetch --provider groq --model llama-3.1-8b-instant https://nextjs.org/docs/app/building-your-application/routing/middleware "how to match locale paths"
+  wr research --provider copilot --model gpt-5-mini "stripe webhook idempotency best practices"
 `)
 }
 
-func requireArgs(n int, usage string) {
-	if len(os.Args) < n {
+func requireMinArgs(args []string, n int, usage string) {
+	if len(args) < n {
 		fatalf("usage: %s", usage)
 	}
+}
+
+func hasConfiguredValue(key string) bool {
+	if key == "COPILOT_CLI" {
+		_, err := exec.LookPath("copilot")
+		return err == nil
+	}
+	if key == "COPILOT_ENV_AUTH" {
+		for _, candidate := range []string{"COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
+			if os.Getenv(candidate) != "" {
+				return true
+			}
+		}
+		return false
+	}
+	for _, candidate := range strings.Split(key, "/") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if os.Getenv(candidate) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func fatalf(format string, args ...any) {
@@ -281,11 +340,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string(runes[:n]) + "\n[truncated]"
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -2,7 +2,7 @@
 
 Token-efficient web research for AI agents.
 
-Combines [TinyFish](https://tinyfish.ai) web search with [Groq](https://console.groq.com) (Llama 3.1) summarization. Use it as a CLI or as an MCP server.
+Combines [TinyFish](https://tinyfish.ai) web search with configurable summarization providers, currently [Groq](https://console.groq.com) and GitHub Copilot CLI. Use it as a CLI or as an MCP server.
 
 Instead of dumping raw HTML, scripts, navbars, ads, and cookie banners into model context, it returns clean focused summaries with sources.
 
@@ -41,12 +41,30 @@ source ~/.bash_profile
 
 ## Configuration
 
+### Groq
+
 Add to `~/.bash_profile` or `~/.zshrc`:
 
 ```bash
 export TINYFISH_API_KEY="..."   # https://agent.tinyfish.ai → Settings → API Keys
-export GROQ_API_KEY="..."       # https://console.groq.com → API Keys (free tier)
+export WR_SUMMARIZER_PROVIDER="groq"      # optional: groq (default) or copilot
+export WR_SUMMARIZER_MODEL="llama-3.1-8b-instant"  # optional: override provider default model
+export GROQ_API_KEY="..."       # required when provider=groq
 export WR_CACHE_DAYS=7          # optional, cache TTL in days (default: 7)
+```
+
+### Copilot CLI (experimental)
+
+```bash
+export TINYFISH_API_KEY="..."   # https://agent.tinyfish.ai → Settings → API Keys
+export WR_SUMMARIZER_PROVIDER="copilot"
+export WR_SUMMARIZER_MODEL="gpt-5-mini"  # optional; COPILOT_MODEL also works
+export COPILOT_MODEL="gpt-5-mini"        # optional
+# Authenticate via the standalone `copilot login` or export one of:
+# export COPILOT_GITHUB_TOKEN="..."
+# export GH_TOKEN="..."
+# export GITHUB_TOKEN="..."
+export WR_CACHE_DAYS=7
 ```
 
 Verify setup:
@@ -57,7 +75,9 @@ wr setup
 Expected output:
 ```
 OK       TINYFISH_API_KEY
+OK       summarizer provider = groq
 OK       GROQ_API_KEY
+OK       summarizer model = llama-3.1-8b-instant
 
 All configured. Try: wr research "your query here"
 ```
@@ -66,11 +86,12 @@ All configured. Try: wr research "your query here"
 
 ### `wr research`: full pipeline (recommended)
 
-Searches, fetches top 3 results, summarizes each with Groq.
+Searches, fetches top 3 results, summarizes each with the configured provider.
 
 ```bash
 wr research "stripe webhook idempotency next.js app router"
 wr research "tailwind v4 migration breaking changes"
+wr research --provider copilot --model gpt-5-mini "next-intl v4 RTL Arabic configuration"
 wr research "next-intl v4 RTL Arabic configuration"
 ```
 
@@ -85,10 +106,11 @@ wr search "postgres JSONB index performance"
 
 ### `wr fetch`: fetch and summarize a URL
 
-Fetches a URL, converts HTML to markdown, summarizes with Groq.
+Fetches a URL, converts HTML to markdown, and summarizes with the selected provider/model.
 
 ```bash
 wr fetch "https://nextjs.org/docs/app/building-your-application/routing/middleware" "how to match locale prefixes"
+wr fetch --provider copilot --model gpt-5-mini "https://docs.stripe.com/webhooks" "signature verification best practices"
 wr fetch "https://docs.stripe.com/webhooks" "signature verification best practices"
 ```
 
@@ -129,7 +151,7 @@ wr research "query"
     │   ├── If miss: fetch URL with net/http
     │   │   └── convert HTML → markdown (html-to-markdown)
     │   ├── Store in cache
-    │   └── Groq API (llama-3.1-8b-instant)
+    │   └── Summarizer provider (Groq or Copilot CLI)
     │       └── summarize markdown, extract relevant info
     │
     └── Print summaries
@@ -137,7 +159,11 @@ wr research "query"
 
 **Cache** is keyed by URL SHA-256, stored at `~/.cache/web-research/`, expires after `WR_CACHE_DAYS` days.
 
-**Groq fallback:** if `GROQ_API_KEY` is unset, returns truncated raw markdown instead of a summary.
+**Fallbacks:**
+- If `GROQ_API_KEY` is unset while using `groq`, returns truncated raw markdown instead of a summary.
+- If Copilot auth/CLI is unavailable while using `copilot`, commands fall back to truncated/raw content.
+
+**Setup note:** `wr setup --provider copilot` can confirm that the `copilot` CLI is installed, but if you rely on a prior `copilot login` session it can only report that auth may be available; the CLI does not expose a documented non-interactive auth-status command.
 
 ## MCP Server
 
@@ -146,8 +172,8 @@ wr research "query"
 | Tool | Purpose |
 |------|---------|
 | `web_search` | Search the web, return clean results |
-| `web_fetch` | Fetch one URL and summarize it |
-| `web_research` | Search + fetch top pages + synthesized answer with sources |
+| `web_fetch` | Fetch one URL and summarize it (`provider` and `model` optional) |
+| `web_research` | Search + fetch top pages + synthesized answer with sources (`provider` and `model` optional) |
 
 See [docs/mcp.md](docs/mcp.md) for client config examples (Claude Desktop, Cursor, generic).
 
@@ -214,7 +240,8 @@ Then reference it from `~/.codex/AGENTS.md`:
 |---------|---------|
 | [html-to-markdown](https://github.com/JohannesKaufmann/html-to-markdown) | HTML → Markdown conversion |
 | [TinyFish API](https://tinyfish.ai) | Live browser-rendered web search |
-| [Groq API](https://console.groq.com) | Fast Llama 3.1 inference (free tier) |
+| [Groq API](https://console.groq.com) | Groq-hosted summarization |
+| [GitHub Copilot CLI](https://github.com/github/copilot-cli) | Optional local summarizer backend |
 
 ## License
 

@@ -30,8 +30,8 @@ func main() {
 }
 
 type searchArgs struct {
-	Query string `json:"query" jsonschema:"required,description=Search query"`
-	Limit int    `json:"limit,omitempty" jsonschema:"description=Max results (default 5 max 10)"`
+	Query string `json:"query" jsonschema:"Search query"`
+	Limit int    `json:"limit,omitempty" jsonschema:"Max results (default 5 max 10)"`
 }
 
 func addSearchTool(server *mcp.Server, svc *research.Service) {
@@ -51,8 +51,10 @@ func addSearchTool(server *mcp.Server, svc *research.Service) {
 }
 
 type fetchArgs struct {
-	URL    string `json:"url" jsonschema:"required,description=URL to fetch (must start with http:// or https://)"`
-	Prompt string `json:"prompt,omitempty" jsonschema:"description=Focus prompt for summarization"`
+	URL      string `json:"url" jsonschema:"URL to fetch (must start with http:// or https://)"`
+	Prompt   string `json:"prompt,omitempty" jsonschema:"Focus prompt for summarization"`
+	Provider string `json:"provider,omitempty" jsonschema:"Summarizer provider: groq or copilot"`
+	Model    string `json:"model,omitempty" jsonschema:"Summarizer model override"`
 }
 
 func addFetchTool(server *mcp.Server, svc *research.Service) {
@@ -61,8 +63,10 @@ func addFetchTool(server *mcp.Server, svc *research.Service) {
 		Description: "Fetch a URL, clean the page, and return a focused summary.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args fetchArgs) (*mcp.CallToolResult, any, error) {
 		resp, err := svc.Fetch(ctx, research.FetchRequest{
-			URL:    args.URL,
-			Prompt: args.Prompt,
+			URL:      args.URL,
+			Prompt:   args.Prompt,
+			Provider: args.Provider,
+			Model:    args.Model,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -72,9 +76,11 @@ func addFetchTool(server *mcp.Server, svc *research.Service) {
 }
 
 type researchArgs struct {
-	Query      string `json:"query" jsonschema:"required,description=Research query"`
-	MaxResults int    `json:"max_results,omitempty" jsonschema:"description=Pages to fetch (default 3 max 5)"`
-	Focus      string `json:"focus,omitempty" jsonschema:"description=Focus prompt to guide summarization"`
+	Query      string `json:"query" jsonschema:"Research query"`
+	MaxResults int    `json:"max_results,omitempty" jsonschema:"Pages to fetch (default 3 max 5)"`
+	Focus      string `json:"focus,omitempty" jsonschema:"Focus prompt to guide summarization"`
+	Provider   string `json:"provider,omitempty" jsonschema:"Summarizer provider: groq or copilot"`
+	Model      string `json:"model,omitempty" jsonschema:"Summarizer model override"`
 }
 
 func addResearchTool(server *mcp.Server, svc *research.Service) {
@@ -86,6 +92,8 @@ func addResearchTool(server *mcp.Server, svc *research.Service) {
 			Query:      args.Query,
 			MaxResults: args.MaxResults,
 			Focus:      args.Focus,
+			Provider:   args.Provider,
+			Model:      args.Model,
 		})
 		if err != nil {
 			return nil, nil, err

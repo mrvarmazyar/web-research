@@ -3,6 +3,8 @@ package research
 import (
 	"fmt"
 	"strings"
+
+	"github.com/mrvarmazyar/web-research/internal/summarize"
 )
 
 func validateSearch(req SearchRequest) error {
@@ -25,6 +27,9 @@ func validateFetch(req FetchRequest) error {
 	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
 		return fmt.Errorf("url must start with http:// or https://")
 	}
+	if err := summarize.ValidateProvider(req.Provider); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -37,6 +42,9 @@ func validateResearch(req ResearchRequest) error {
 	}
 	if req.MaxResults > maxMaxResults {
 		return fmt.Errorf("max_results must be <= %d", maxMaxResults)
+	}
+	if err := summarize.ValidateProvider(req.Provider); err != nil {
+		return err
 	}
 	return nil
 }

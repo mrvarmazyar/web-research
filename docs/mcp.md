@@ -10,9 +10,24 @@ go build -o ~/.local/bin/wr-mcp ./cmd/wr-mcp
 
 ## Environment Variables
 
+### Groq example
+
 ```bash
 export TINYFISH_API_KEY="..."   # https://agent.tinyfish.ai → API Keys
-export GROQ_API_KEY="..."       # https://console.groq.com → API Keys (free)
+export WR_SUMMARIZER_PROVIDER="groq"      # optional: groq (default) or copilot
+export WR_SUMMARIZER_MODEL="llama-3.1-8b-instant"  # optional
+export GROQ_API_KEY="..."       # required when provider=groq
+export WR_CACHE_DAYS=7          # optional, default 7
+```
+
+### Copilot example
+
+```bash
+export TINYFISH_API_KEY="..."
+export WR_SUMMARIZER_PROVIDER="copilot"
+export WR_SUMMARIZER_MODEL="gpt-5-mini"
+export COPILOT_MODEL="gpt-5-mini"         # optional when provider=copilot
+# Authenticate Copilot via the standalone `copilot login` or export COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN
 export WR_CACHE_DAYS=7          # optional, default 7
 ```
 
@@ -27,6 +42,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "/Users/YOUR_USER/.local/bin/wr-mcp",
       "env": {
         "TINYFISH_API_KEY": "your_key",
+        "WR_SUMMARIZER_PROVIDER": "groq",
+        "WR_SUMMARIZER_MODEL": "llama-3.1-8b-instant",
         "GROQ_API_KEY": "your_key",
         "WR_CACHE_DAYS": "7"
       }
@@ -46,7 +63,8 @@ Edit `.cursor/mcp.json` in your project or `~/.cursor/mcp.json` globally:
       "command": "/Users/YOUR_USER/.local/bin/wr-mcp",
       "env": {
         "TINYFISH_API_KEY": "your_key",
-        "GROQ_API_KEY": "your_key"
+        "WR_SUMMARIZER_PROVIDER": "copilot",
+        "WR_SUMMARIZER_MODEL": "gpt-5-mini"
       }
     }
   }
@@ -63,6 +81,8 @@ Any client supporting the stdio MCP transport:
   "transport": "stdio",
   "env": {
     "TINYFISH_API_KEY": "your_key",
+    "WR_SUMMARIZER_PROVIDER": "groq",
+    "WR_SUMMARIZER_MODEL": "llama-3.1-8b-instant",
     "GROQ_API_KEY": "your_key"
   }
 }
@@ -73,8 +93,8 @@ Any client supporting the stdio MCP transport:
 | Tool | Description |
 |------|-------------|
 | `web_search` | Search the web, returns title + URL + snippet |
-| `web_fetch` | Fetch one URL, return focused summary |
-| `web_research` | Search + fetch top pages + synthesized answer with sources |
+| `web_fetch` | Fetch one URL, return focused summary; accepts optional `provider` and `model` |
+| `web_research` | Search + fetch top pages + synthesized answer with sources; accepts optional `provider` and `model` |
 
 ## Logs
 
