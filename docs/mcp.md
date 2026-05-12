@@ -22,6 +22,12 @@ export WR_CACHE_DAYS=7          # optional, default 7
 
 ### Copilot example
 
+Install the standalone Copilot CLI first:
+
+```bash
+brew install copilot-cli
+```
+
 ```bash
 export TINYFISH_API_KEY="..."
 export WR_SUMMARIZER_PROVIDER="copilot"

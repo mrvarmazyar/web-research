@@ -55,6 +55,12 @@ export WR_CACHE_DAYS=7          # optional, cache TTL in days (default: 7)
 
 ### Copilot CLI (experimental)
 
+Install the standalone Copilot CLI first:
+
+```bash
+brew install copilot-cli
+```
+
 ```bash
 export TINYFISH_API_KEY="..."   # https://agent.tinyfish.ai → Settings → API Keys
 export WR_SUMMARIZER_PROVIDER="copilot"
