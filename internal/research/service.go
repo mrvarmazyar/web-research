@@ -3,6 +3,7 @@ package research
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
@@ -12,10 +13,10 @@ import (
 )
 
 const (
-	defaultSearchLimit    = 5
-	maxSearchLimit        = 10
-	defaultMaxResults     = 3
-	maxMaxResults         = 5
+	defaultSearchLimit = 5
+	maxSearchLimit     = 10
+	defaultMaxResults  = 3
+	maxMaxResults      = 5
 )
 
 type Service struct{}
@@ -48,7 +49,7 @@ func (s *Service) Search(_ context.Context, req SearchRequest) (*SearchResponse,
 	return &SearchResponse{Query: req.Query, Results: out}, nil
 }
 
-func (s *Service) Fetch(_ context.Context, req FetchRequest) (*FetchResponse, error) {
+func (s *Service) Fetch(ctx context.Context, req FetchRequest) (*FetchResponse, error) {
 	if err := validateFetch(req); err != nil {
 		return nil, err
 	}
@@ -68,14 +69,13 @@ func (s *Service) Fetch(_ context.Context, req FetchRequest) (*FetchResponse, er
 		_ = cache.Set(req.URL, content)
 	}
 
-	prompt := req.Prompt
-	if prompt == "" {
-		prompt = "summarize the key information from this page"
-	}
-
-	summary, err := summarize.Summarize(content, prompt)
+	summary, err := summarize.Summarize(ctx, content, req.Prompt, summarize.Options{
+		Provider: req.Provider,
+		Model:    req.Model,
+	})
 	if err != nil {
-		summary = truncate(content, 3000)
+		fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing truncated content\n", err)
+		summary = truncate(content, summarize.MaxFallbackChars)
 	}
 
 	rawLen := len(content)
@@ -95,7 +95,7 @@ func (s *Service) Fetch(_ context.Context, req FetchRequest) (*FetchResponse, er
 	}, nil
 }
 
-func (s *Service) Research(_ context.Context, req ResearchRequest) (*ResearchResponse, error) {
+func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchResponse, error) {
 	if err := validateResearch(req); err != nil {
 		return nil, err
 	}
@@ -139,9 +139,13 @@ func (s *Service) Research(_ context.Context, req ResearchRequest) (*ResearchRes
 			_ = cache.Set(r.URL, content)
 		}
 
-		summary, err := summarize.Summarize(content, focus)
+		summary, err := summarize.Summarize(ctx, content, focus, summarize.Options{
+			Provider: req.Provider,
+			Model:    req.Model,
+		})
 		if err != nil {
-			summary = truncate(content, 500)
+			fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing truncated content\n", err)
+			summary = truncate(content, summarize.MaxFallbackChars)
 		}
 
 		sources = append(sources, SourceSummary{
@@ -155,8 +159,12 @@ func (s *Service) Research(_ context.Context, req ResearchRequest) (*ResearchRes
 
 	// Synthesize final answer from all source summaries
 	combined := strings.Join(summaries, "\n\n---\n\n")
-	answer, err := summarize.Summarize(combined, fmt.Sprintf("Based on these sources, provide a comprehensive answer to: %s", req.Query))
+	answer, err := summarize.Summarize(ctx, combined, fmt.Sprintf("Based on these sources, provide a comprehensive answer to: %s", req.Query), summarize.Options{
+		Provider: req.Provider,
+		Model:    req.Model,
+	})
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing combined source summaries\n", err)
 		answer = combined
 	}
 

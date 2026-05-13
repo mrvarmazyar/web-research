@@ -35,8 +35,10 @@ func TestValidateFetch(t *testing.T) {
 		{"empty url", FetchRequest{URL: ""}, true},
 		{"no scheme", FetchRequest{URL: "example.com"}, true},
 		{"ftp scheme", FetchRequest{URL: "ftp://example.com"}, true},
+		{"invalid provider", FetchRequest{URL: "https://example.com", Provider: "bad"}, true},
 		{"http ok", FetchRequest{URL: "http://example.com"}, false},
 		{"https ok", FetchRequest{URL: "https://example.com"}, false},
+		{"copilot ok", FetchRequest{URL: "https://example.com", Provider: "copilot", Model: "gpt-5-mini"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,8 +58,10 @@ func TestValidateResearch(t *testing.T) {
 	}{
 		{"empty query", ResearchRequest{Query: ""}, true},
 		{"max_results too high", ResearchRequest{Query: "q", MaxResults: 6}, true},
+		{"invalid provider", ResearchRequest{Query: "q", Provider: "bad"}, true},
 		{"valid", ResearchRequest{Query: "q", MaxResults: 3}, false},
 		{"zero max ok", ResearchRequest{Query: "q", MaxResults: 0}, false},
+		{"copilot ok", ResearchRequest{Query: "q", Provider: "copilot", Model: "gpt-5-mini"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
