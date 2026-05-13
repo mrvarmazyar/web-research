@@ -204,23 +204,35 @@ func humanBytes(b int) string {
 }
 
 func cmdSetup() {
-	type check struct {
-		key  string
-		hint string
-	}
-	checks := []check{
-		{"TINYFISH_API_KEY", "https://agent.tinyfish.ai → Settings → API Keys"},
-		{"GROQ_API_KEY", "https://console.groq.com → API Keys (free tier available)"},
+	allOk := true
+
+	// Search provider: at least one of TINYFISH_API_KEY or TAVILY_API_KEY must be set.
+	tinyfish := os.Getenv("TINYFISH_API_KEY")
+	tavily := os.Getenv("TAVILY_API_KEY")
+	switch {
+	case tinyfish != "" && tavily != "":
+		provider := os.Getenv("SEARCH_PROVIDER")
+		if provider == "" {
+			provider = "tavily"
+		}
+		fmt.Printf("OK       SEARCH_PROVIDER (%s) — both keys set\n", provider)
+	case tavily != "":
+		fmt.Printf("OK       SEARCH_PROVIDER (tavily)\n")
+	case tinyfish != "":
+		fmt.Printf("OK       SEARCH_PROVIDER (tinyfish)\n")
+	default:
+		fmt.Printf("MISSING  TINYFISH_API_KEY or TAVILY_API_KEY (need at least one)\n")
+		fmt.Printf("         https://app.tavily.com → API Keys (1000 free credits/month)\n")
+		fmt.Printf("         https://agent.tinyfish.ai → Settings → API Keys\n\n")
+		allOk = false
 	}
 
-	allOk := true
-	for _, c := range checks {
-		if os.Getenv(c.key) == "" {
-			fmt.Printf("MISSING  %s\n         %s\n\n", c.key, c.hint)
-			allOk = false
-		} else {
-			fmt.Printf("OK       %s\n", c.key)
-		}
+	// Other required keys.
+	if os.Getenv("GROQ_API_KEY") == "" {
+		fmt.Printf("MISSING  GROQ_API_KEY\n         https://console.groq.com → API Keys (free tier available)\n\n")
+		allOk = false
+	} else {
+		fmt.Printf("OK       GROQ_API_KEY\n")
 	}
 
 	fmt.Println()
@@ -245,7 +257,7 @@ func usage() {
 	fmt.Print(`wr — web research CLI
 
 COMMANDS
-  wr search <query>          Search web via tinyfish
+  wr search <query>          Search web (provider auto-detected)
   wr fetch <url> <prompt>    Fetch URL and summarize with Groq
   wr research <query>        Search + fetch top 3 + summarize
   wr setup                   Check env var configuration
@@ -254,6 +266,8 @@ COMMANDS
 
 ENV VARS
   TINYFISH_API_KEY    Web search  (tinyfish.ai, free)
+  TAVILY_API_KEY      Web search  (tavily.com, 1000 free credits/month)
+  SEARCH_PROVIDER     Search backend: 'tavily' or 'tinyfish' (auto-detected if omitted)
   GROQ_API_KEY        Summarizer  (console.groq.com, free)
   WR_CACHE_DAYS       Cache TTL in days (default: 7)
 
