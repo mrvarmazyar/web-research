@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -54,9 +53,6 @@ func summarizeWithCopilot(ctx context.Context, content, prompt, model string) (s
 
 	result := strings.TrimSpace(stdout.String())
 	if result == "" {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			_, _ = fmt.Fprintf(os.Stderr, "warning: copilot returned no stdout; stderr: %s\n", msg)
-		}
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return fallbackContent(content), fmt.Errorf("copilot returned no output: %s", msg)
 		}
