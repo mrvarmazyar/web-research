@@ -17,10 +17,9 @@ type tavilyRequest struct {
 }
 
 type tavilyResult struct {
-	Title   string  `json:"title"`
-	URL     string  `json:"url"`
-	Content string  `json:"content"`
-	Score   float64 `json:"score"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Content string `json:"content"`
 }
 
 type tavilyResponse struct {
@@ -49,7 +48,7 @@ func SearchTavily(query string) ([]Result, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tavily returned HTTP %d", resp.StatusCode)
 	}
 
