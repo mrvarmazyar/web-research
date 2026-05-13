@@ -248,6 +248,7 @@ func cmdSetup(opts summaryOptions) {
 			fmt.Printf("OK       COPILOT_AUTH\n")
 		case hasConfiguredValue("COPILOT_CLI"):
 			fmt.Printf("INFO     COPILOT_AUTH\n         No token env vars detected. If you've already run `copilot login`, that may still work; the login session cannot be verified non-interactively.\n")
+			allOk = false
 		default:
 			fmt.Printf("MISSING  COPILOT_AUTH\n         Authenticate with `copilot login` or export COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN\n\n")
 			allOk = false
@@ -317,16 +318,7 @@ func hasConfiguredValue(key string) bool {
 		}
 		return false
 	}
-	for _, candidate := range strings.Split(key, "/") {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-		if os.Getenv(candidate) != "" {
-			return true
-		}
-	}
-	return false
+	return os.Getenv(key) != ""
 }
 
 func fatalf(format string, args ...any) {

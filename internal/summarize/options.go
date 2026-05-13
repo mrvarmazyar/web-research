@@ -14,6 +14,7 @@ const (
 	defaultProvider  = ProviderGroq
 	groqDefaultModel = "llama-3.1-8b-instant"
 	maxInputRunes    = 12000 // ~3k tokens
+	MaxFallbackChars = 3000
 	maxOutputTokens  = 1024
 	systemPrompt     = "You are a concise technical research assistant. Extract and summarize relevant information from web content. Be direct and specific."
 	defaultFetchTask = "summarize the key information from this page"
@@ -68,13 +69,7 @@ func ValidateProvider(provider string) error {
 }
 
 func validateResolvedOptions(opts Options) error {
-	if err := ValidateProvider(opts.Provider); err != nil {
-		return err
-	}
-	if normalizeProvider(opts.Provider) == "" {
-		return fmt.Errorf("provider must not be empty")
-	}
-	return nil
+	return ValidateProvider(opts.Provider)
 }
 
 func normalizeProvider(provider string) string {

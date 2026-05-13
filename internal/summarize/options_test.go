@@ -47,7 +47,7 @@ func TestResolveOptionsInvalidProvider(t *testing.T) {
 	if got.Provider != "bad" {
 		t.Fatalf("provider = %q, want bad", got.Provider)
 	}
-	if err := ValidateProvider(got.Provider); err == nil {
+	if err := validateResolvedOptions(got); err == nil {
 		t.Fatal("ValidateProvider(bad) expected error")
 	}
 }

@@ -22,24 +22,11 @@ export WR_CACHE_DAYS=7          # optional, default 7
 
 ### Copilot example
 
-Install the standalone Copilot CLI first.
-
-macOS / Linux (recommended):
+Install a Copilot CLI that exposes a `copilot` binary, then verify:
 
 ```bash
-brew install copilot-cli
-```
-
-macOS / Linux (shell installer fallback):
-
-```bash
-curl -fsSL https://gh.io/copilot-install | bash
-```
-
-Cross-platform fallback:
-
-```bash
-npm install -g @github/copilot
+copilot --help
+copilot login
 ```
 
 ```bash

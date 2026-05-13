@@ -3,6 +3,7 @@ package research
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
@@ -49,9 +50,6 @@ func (s *Service) Search(_ context.Context, req SearchRequest) (*SearchResponse,
 }
 
 func (s *Service) Fetch(ctx context.Context, req FetchRequest) (*FetchResponse, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := validateFetch(req); err != nil {
 		return nil, err
 	}
@@ -76,7 +74,8 @@ func (s *Service) Fetch(ctx context.Context, req FetchRequest) (*FetchResponse, 
 		Model:    req.Model,
 	})
 	if err != nil {
-		summary = truncate(content, 3000)
+		fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing truncated content\n", err)
+		summary = truncate(content, summarize.MaxFallbackChars)
 	}
 
 	rawLen := len(content)
@@ -97,9 +96,6 @@ func (s *Service) Fetch(ctx context.Context, req FetchRequest) (*FetchResponse, 
 }
 
 func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchResponse, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := validateResearch(req); err != nil {
 		return nil, err
 	}
@@ -148,7 +144,8 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 			Model:    req.Model,
 		})
 		if err != nil {
-			summary = truncate(content, 500)
+			fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing truncated content\n", err)
+			summary = truncate(content, summarize.MaxFallbackChars)
 		}
 
 		sources = append(sources, SourceSummary{
@@ -167,6 +164,7 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 		Model:    req.Model,
 	})
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing combined source summaries\n", err)
 		answer = combined
 	}
 

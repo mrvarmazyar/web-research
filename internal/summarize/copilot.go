@@ -5,16 +5,22 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
 
 type commandRunner interface {
+	SetStdin(io.Reader)
 	Run(stdout, stderr io.Writer) error
 }
 
 type execCmd struct {
 	cmd *exec.Cmd
+}
+
+func (c execCmd) SetStdin(r io.Reader) {
+	c.cmd.Stdin = r
 }
 
 func (c execCmd) Run(stdout, stderr io.Writer) error {
@@ -29,12 +35,13 @@ var execCommandContext = func(ctx context.Context, name string, args ...string) 
 
 func summarizeWithCopilot(ctx context.Context, content, prompt, model string) (string, error) {
 	fullPrompt := systemPrompt + "\n\n" + buildUserPrompt(content, prompt)
-	args := []string{"-p", fullPrompt, "-s"}
+	args := []string{"-s"} // -s = --silent, documented for scripting/non-interactive usage.
 	if strings.TrimSpace(model) != "" {
 		args = append(args, "--model", model)
 	}
 
 	cmd := execCommandContext(ctx, "copilot", args...)
+	cmd.SetStdin(strings.NewReader(fullPrompt))
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -47,6 +54,9 @@ func summarizeWithCopilot(ctx context.Context, content, prompt, model string) (s
 
 	result := strings.TrimSpace(stdout.String())
 	if result == "" {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: copilot returned no stdout; stderr: %s\n", msg)
+		}
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return content, fmt.Errorf("copilot returned no output: %s", msg)
 		}

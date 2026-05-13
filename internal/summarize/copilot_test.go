@@ -10,10 +10,15 @@ import (
 )
 
 type fakeCmd struct {
-	run func(stdout, stderr io.Writer) error
+	stdin io.Reader
+	run   func(stdout, stderr io.Writer) error
 }
 
-func (c fakeCmd) Run(stdout, stderr io.Writer) error {
+func (c *fakeCmd) SetStdin(r io.Reader) {
+	c.stdin = r
+}
+
+func (c *fakeCmd) Run(stdout, stderr io.Writer) error {
 	if c.run == nil {
 		return nil
 	}
@@ -26,13 +31,15 @@ func TestSummarizeWithCopilotBuildsExpectedCommand(t *testing.T) {
 
 	var gotName string
 	var gotArgs []string
+	var fake *fakeCmd
 	execCommandContext = func(ctx context.Context, name string, args ...string) commandRunner {
 		gotName = name
 		gotArgs = append([]string(nil), args...)
-		return fakeCmd{run: func(stdout, stderr io.Writer) error {
+		fake = &fakeCmd{run: func(stdout, stderr io.Writer) error {
 			_, _ = io.WriteString(stdout, "summary")
 			return nil
 		}}
+		return fake
 	}
 
 	got, err := summarizeWithCopilot(context.Background(), "content", "prompt", "gpt-5-mini")
@@ -45,9 +52,20 @@ func TestSummarizeWithCopilotBuildsExpectedCommand(t *testing.T) {
 	if gotName != "copilot" {
 		t.Fatalf("command = %q, want copilot", gotName)
 	}
-	wantArgs := []string{"-p", systemPrompt + "\n\n" + buildUserPrompt("content", "prompt"), "-s", "--model", "gpt-5-mini"}
+	wantArgs := []string{"-s", "--model", "gpt-5-mini"}
 	if !reflect.DeepEqual(gotArgs, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", gotArgs, wantArgs)
+	}
+	if fake == nil || fake.stdin == nil {
+		t.Fatal("stdin was not set")
+	}
+	stdin, err := io.ReadAll(fake.stdin)
+	if err != nil {
+		t.Fatalf("read stdin: %v", err)
+	}
+	wantStdin := systemPrompt + "\n\n" + buildUserPrompt("content", "prompt")
+	if string(stdin) != wantStdin {
+		t.Fatalf("stdin = %q, want %q", string(stdin), wantStdin)
 	}
 }
 
@@ -56,7 +74,7 @@ func TestSummarizeWithCopilotReturnsStderrOnFailure(t *testing.T) {
 	defer func() { execCommandContext = original }()
 
 	execCommandContext = func(ctx context.Context, name string, args ...string) commandRunner {
-		return fakeCmd{run: func(stdout, stderr io.Writer) error {
+		return &fakeCmd{run: func(stdout, stderr io.Writer) error {
 			_, _ = io.WriteString(stderr, "No authentication information found")
 			return errors.New("exit status 1")
 		}}
@@ -79,7 +97,7 @@ func TestSummarizeWithCopilotEmptyOutput(t *testing.T) {
 	defer func() { execCommandContext = original }()
 
 	execCommandContext = func(ctx context.Context, name string, args ...string) commandRunner {
-		return fakeCmd{run: func(stdout, stderr io.Writer) error { return nil }}
+		return &fakeCmd{run: func(stdout, stderr io.Writer) error { return nil }}
 	}
 
 	got, err := summarizeWithCopilot(context.Background(), "content", "prompt", "")
