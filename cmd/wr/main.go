@@ -210,6 +210,7 @@ func cmdSetup() {
 	}
 	checks := []check{
 		{"TINYFISH_API_KEY", "https://agent.tinyfish.ai → Settings → API Keys"},
+		{"TAVILY_API_KEY", "https://app.tavily.com → API Keys (1000 free credits/month)"},
 		{"GROQ_API_KEY", "https://console.groq.com → API Keys (free tier available)"},
 	}
 
@@ -254,6 +255,8 @@ COMMANDS
 
 ENV VARS
   TINYFISH_API_KEY    Web search  (tinyfish.ai, free)
+  TAVILY_API_KEY      Web search  (tavily.com, 1000 free credits/month)
+  SEARCH_PROVIDER     Search backend: 'tavily' or 'tinyfish' (auto-detected if omitted)
   GROQ_API_KEY        Summarizer  (console.groq.com, free)
   WR_CACHE_DAYS       Cache TTL in days (default: 7)
 

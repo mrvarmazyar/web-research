@@ -22,7 +22,8 @@ type response struct {
 	Results []Result `json:"results"`
 }
 
-func Search(query string) ([]Result, error) {
+// SearchTinyFish queries the TinyFish search API.
+func SearchTinyFish(query string) ([]Result, error) {
 	apiKey := os.Getenv("TINYFISH_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("TINYFISH_API_KEY not set — get free key at https://agent.tinyfish.ai")
