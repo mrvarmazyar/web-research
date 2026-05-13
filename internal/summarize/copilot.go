@@ -47,9 +47,9 @@ func summarizeWithCopilot(ctx context.Context, content, prompt, model string) (s
 
 	if err := cmd.Run(&stdout, &stderr); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return content, fmt.Errorf("copilot command failed: %s", msg)
+			return fallbackContent(content), fmt.Errorf("copilot command failed: %s", msg)
 		}
-		return content, fmt.Errorf("copilot command failed: %w", err)
+		return fallbackContent(content), fmt.Errorf("copilot command failed: %w", err)
 	}
 
 	result := strings.TrimSpace(stdout.String())
@@ -58,9 +58,9 @@ func summarizeWithCopilot(ctx context.Context, content, prompt, model string) (s
 			_, _ = fmt.Fprintf(os.Stderr, "warning: copilot returned no stdout; stderr: %s\n", msg)
 		}
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return content, fmt.Errorf("copilot returned no output: %s", msg)
+			return fallbackContent(content), fmt.Errorf("copilot returned no output: %s", msg)
 		}
-		return content, fmt.Errorf("copilot returned no output")
+		return fallbackContent(content), fmt.Errorf("copilot returned no output")
 	}
 
 	return result, nil

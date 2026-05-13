@@ -34,7 +34,7 @@ type chatResponse struct {
 func summarizeWithGroq(ctx context.Context, content, prompt, model string) (string, error) {
 	apiKey := os.Getenv("GROQ_API_KEY")
 	if apiKey == "" {
-		return content, nil
+		return fallbackContent(content), nil
 	}
 
 	payload, _ := json.Marshal(chatRequest{
@@ -55,20 +55,20 @@ func summarizeWithGroq(ctx context.Context, content, prompt, model string) (stri
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return content, fmt.Errorf("groq request failed: %w", err)
+		return fallbackContent(content), fmt.Errorf("groq request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return content, fmt.Errorf("groq returned HTTP %d", resp.StatusCode)
+		return fallbackContent(content), fmt.Errorf("groq returned HTTP %d", resp.StatusCode)
 	}
 
 	var result chatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return content, err
+		return fallbackContent(content), err
 	}
 	if len(result.Choices) == 0 {
-		return content, fmt.Errorf("empty response from groq")
+		return fallbackContent(content), fmt.Errorf("empty response from groq")
 	}
 
 	return strings.TrimSpace(result.Choices[0].Message.Content), nil

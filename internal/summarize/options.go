@@ -84,6 +84,14 @@ func truncateContent(content string) string {
 	return content
 }
 
+func fallbackContent(content string) string {
+	runes := []rune(content)
+	if len(runes) > MaxFallbackChars {
+		return string(runes[:MaxFallbackChars]) + "\n[truncated]"
+	}
+	return content
+}
+
 func buildUserPrompt(content, prompt string) string {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
