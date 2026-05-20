@@ -55,6 +55,8 @@ type fetchArgs struct {
 	Prompt   string `json:"prompt,omitempty" jsonschema:"Focus prompt for summarization"`
 	Provider string `json:"provider,omitempty" jsonschema:"Summarizer provider: groq or copilot"`
 	Model    string `json:"model,omitempty" jsonschema:"Summarizer model override"`
+	Mode     string `json:"mode,omitempty" jsonschema:"Output mode: summarize (default), lossless, chunks"`
+	TopK     int    `json:"top_k,omitempty" jsonschema:"Chunks to return when mode=chunks (default 5)"`
 }
 
 func addFetchTool(server *mcp.Server, svc *research.Service) {
@@ -67,6 +69,8 @@ func addFetchTool(server *mcp.Server, svc *research.Service) {
 			Prompt:   args.Prompt,
 			Provider: args.Provider,
 			Model:    args.Model,
+			Mode:     args.Mode,
+			TopK:     args.TopK,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -81,6 +85,8 @@ type researchArgs struct {
 	Focus      string `json:"focus,omitempty" jsonschema:"Focus prompt to guide summarization"`
 	Provider   string `json:"provider,omitempty" jsonschema:"Summarizer provider: groq or copilot"`
 	Model      string `json:"model,omitempty" jsonschema:"Summarizer model override"`
+	Mode       string `json:"mode,omitempty" jsonschema:"Output mode: summarize (default), lossless, chunks"`
+	TopK       int    `json:"top_k,omitempty" jsonschema:"Chunks to return when mode=chunks (default 5)"`
 }
 
 func addResearchTool(server *mcp.Server, svc *research.Service) {
@@ -94,6 +100,8 @@ func addResearchTool(server *mcp.Server, svc *research.Service) {
 			Focus:      args.Focus,
 			Provider:   args.Provider,
 			Model:      args.Model,
+			Mode:       args.Mode,
+			TopK:       args.TopK,
 		})
 		if err != nil {
 			return nil, nil, err
