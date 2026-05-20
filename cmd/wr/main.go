@@ -35,10 +35,10 @@ func main() {
 		requireMinArgs(remaining, 1, "wr search <query>")
 		cmdSearch(strings.Join(remaining, " "))
 	case "fetch":
-		requireMinArgs(remaining, 2, "wr fetch [--provider groq|copilot] [--model MODEL] <url> <prompt>")
+		requireMinArgs(remaining, 2, "wr fetch [--mode summarize|lossless|chunks] [--top-k N] [--provider groq|copilot] [--model MODEL] <url> <prompt>")
 		cmdFetch(remaining[0], strings.Join(remaining[1:], " "), opts)
 	case "research":
-		requireMinArgs(remaining, 1, "wr research [--provider groq|copilot] [--model MODEL] <query>")
+		requireMinArgs(remaining, 1, "wr research [--mode summarize|lossless|chunks] [--top-k N] [--provider groq|copilot] [--model MODEL] <query>")
 		cmdResearch(strings.Join(remaining, " "), opts)
 	case "setup":
 		cmdSetup(opts)
@@ -61,7 +61,14 @@ func cmdSearch(query string) {
 }
 
 func cmdFetch(url, prompt string, opts summaryOptions) {
-	resp, err := svc.Fetch(context.Background(), research.FetchRequest{URL: url, Prompt: prompt, Provider: opts.Provider, Model: opts.Model})
+	resp, err := svc.Fetch(context.Background(), research.FetchRequest{
+		URL:      url,
+		Prompt:   prompt,
+		Provider: opts.Provider,
+		Model:    opts.Model,
+		Mode:     opts.Mode,
+		TopK:     opts.TopK,
+	})
 	if err != nil {
 		fatalf("fetch: %v", err)
 	}
@@ -70,7 +77,13 @@ func cmdFetch(url, prompt string, opts summaryOptions) {
 
 func cmdResearch(query string, opts summaryOptions) {
 	fmt.Fprintf(os.Stderr, "→ searching: %s\n\n", query)
-	resp, err := svc.Research(context.Background(), research.ResearchRequest{Query: query, Provider: opts.Provider, Model: opts.Model})
+	resp, err := svc.Research(context.Background(), research.ResearchRequest{
+		Query:    query,
+		Provider: opts.Provider,
+		Model:    opts.Model,
+		Mode:     opts.Mode,
+		TopK:     opts.TopK,
+	})
 	if err != nil {
 		fatalf("research: %v", err)
 	}
@@ -272,10 +285,10 @@ func usage() {
 
 COMMANDS
   wr search <query>          Search web via tinyfish
-  wr fetch [--provider groq|copilot] [--model MODEL] <url> <prompt>
-                            Fetch URL and summarize with chosen provider
-  wr research [--provider groq|copilot] [--model MODEL] <query>
-                            Search + fetch top 3 + summarize
+  wr fetch [--mode summarize|lossless|chunks] [--top-k N] [--provider groq|copilot] [--model MODEL] <url> <prompt>
+                            Fetch URL and return content using chosen mode
+  wr research [--mode summarize|lossless|chunks] [--top-k N] [--provider groq|copilot] [--model MODEL] <query>
+                            Search + fetch top 3 + return content using chosen mode
   wr setup [--provider groq|copilot] [--model MODEL]
                             Check env var configuration
   wr bench [--provider groq|copilot] [--model MODEL]
@@ -294,8 +307,9 @@ ENV VARS
 
 EXAMPLES
   wr search "next.js middleware locale redirect"
-  wr fetch --provider groq --model llama-3.1-8b-instant https://nextjs.org/docs/app/building-your-application/routing/middleware "how to match locale paths"
-  wr research --provider copilot --model gpt-5-mini "stripe webhook idempotency best practices"
+  wr fetch --mode lossless https://nextjs.org/docs/app/building-your-application/routing/middleware "middleware"
+  wr fetch --mode chunks --top-k 5 https://docs.stripe.com/webhooks "signature verification"
+  wr research --mode chunks --top-k 3 "stripe webhook idempotency best practices"
 `)
 }
 
