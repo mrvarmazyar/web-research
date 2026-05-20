@@ -30,7 +30,19 @@ func validateFetch(req FetchRequest) error {
 	if err := summarize.ValidateProvider(req.Provider); err != nil {
 		return err
 	}
+	if err := validateMode(req.Mode); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateMode(mode string) error {
+	switch mode {
+	case "", "summarize", "lossless", "chunks":
+		return nil
+	default:
+		return fmt.Errorf("mode must be one of: summarize, lossless, chunks")
+	}
 }
 
 func validateResearch(req ResearchRequest) error {
@@ -44,6 +56,9 @@ func validateResearch(req ResearchRequest) error {
 		return fmt.Errorf("max_results must be <= %d", maxMaxResults)
 	}
 	if err := summarize.ValidateProvider(req.Provider); err != nil {
+		return err
+	}
+	if err := validateMode(req.Mode); err != nil {
 		return err
 	}
 	return nil

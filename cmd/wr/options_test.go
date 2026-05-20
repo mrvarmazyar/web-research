@@ -8,6 +8,8 @@ func TestParseSummaryOptions(t *testing.T) {
 		args      []string
 		provider  string
 		model     string
+		mode      string
+		topK      int
 		remaining []string
 		wantErr   bool
 	}{
@@ -20,6 +22,15 @@ func TestParseSummaryOptions(t *testing.T) {
 		{name: "unknown option", args: []string{"--bogus", "q"}, wantErr: true},
 		{name: "missing provider value", args: []string{"--provider"}, wantErr: true},
 		{name: "missing model value", args: []string{"--model"}, wantErr: true},
+		{name: "mode lossless", args: []string{"--mode", "lossless", "q"}, mode: "lossless", remaining: []string{"q"}},
+		{name: "mode chunks", args: []string{"--mode", "chunks", "q"}, mode: "chunks", remaining: []string{"q"}},
+		{name: "mode equals", args: []string{"--mode=chunks", "q"}, mode: "chunks", remaining: []string{"q"}},
+		{name: "top-k flag", args: []string{"--top-k", "3", "q"}, topK: 3, remaining: []string{"q"}},
+		{name: "top-k equals", args: []string{"--top-k=7", "q"}, topK: 7, remaining: []string{"q"}},
+		{name: "invalid mode", args: []string{"--mode", "bad", "q"}, wantErr: true},
+		{name: "missing mode value", args: []string{"--mode"}, wantErr: true},
+		{name: "missing top-k value", args: []string{"--top-k"}, wantErr: true},
+		{name: "top-k not int", args: []string{"--top-k", "abc", "q"}, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -36,6 +47,12 @@ func TestParseSummaryOptions(t *testing.T) {
 			}
 			if got.Model != tt.model {
 				t.Fatalf("model = %q, want %q", got.Model, tt.model)
+			}
+			if got.Mode != tt.mode {
+				t.Fatalf("mode = %q, want %q", got.Mode, tt.mode)
+			}
+			if got.TopK != tt.topK {
+				t.Fatalf("topK = %d, want %d", got.TopK, tt.topK)
 			}
 			if len(remaining) != len(tt.remaining) {
 				t.Fatalf("remaining len = %d, want %d", len(remaining), len(tt.remaining))

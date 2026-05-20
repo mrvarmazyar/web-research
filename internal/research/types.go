@@ -21,6 +21,8 @@ type FetchRequest struct {
 	Prompt   string `json:"prompt,omitempty"`
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+	TopK     int    `json:"top_k,omitempty"`
 }
 
 type FetchResponse struct {
@@ -38,6 +40,8 @@ type ResearchRequest struct {
 	Focus      string `json:"focus,omitempty"`
 	Provider   string `json:"provider,omitempty"`
 	Model      string `json:"model,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	TopK       int    `json:"top_k,omitempty"`
 }
 
 type SourceSummary struct {

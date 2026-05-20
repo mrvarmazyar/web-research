@@ -89,3 +89,66 @@ func TestReductionPct(t *testing.T) {
 		t.Errorf("reductionPct(0, 100) = %v, want 0", pct)
 	}
 }
+
+func TestValidateMode(t *testing.T) {
+	tests := []struct {
+		mode    string
+		wantErr bool
+	}{
+		{"", false},
+		{"summarize", false},
+		{"lossless", false},
+		{"chunks", false},
+		{"bad", true},
+		{"SUMMARIZE", true},
+		{"chunk", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			err := validateMode(tt.mode)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateMode(%q) error = %v, wantErr %v", tt.mode, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateFetchMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     FetchRequest
+		wantErr bool
+	}{
+		{"valid lossless", FetchRequest{URL: "https://example.com", Mode: "lossless"}, false},
+		{"valid chunks", FetchRequest{URL: "https://example.com", Mode: "chunks"}, false},
+		{"invalid mode", FetchRequest{URL: "https://example.com", Mode: "bad"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFetch(tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateFetch() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateResearchMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     ResearchRequest
+		wantErr bool
+	}{
+		{"valid lossless", ResearchRequest{Query: "q", Mode: "lossless"}, false},
+		{"valid chunks", ResearchRequest{Query: "q", Mode: "chunks"}, false},
+		{"invalid mode", ResearchRequest{Query: "q", Mode: "xyz"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateResearch(tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateResearch() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
