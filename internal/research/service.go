@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
 	"github.com/mrvarmazyar/web-research/internal/fetch"
@@ -128,52 +130,77 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 		focus = req.Query
 	}
 
-	sources := make([]SourceSummary, 0, limit)
-	cacheHits := 0
-	var summaries []string
+	type pageResult struct {
+		source  SourceSummary
+		summary string
+		ok      bool
+	}
+
+	pageResults := make([]pageResult, limit)
+	var cacheHits atomic.Int64
+	var wg sync.WaitGroup
 
 	for i := 0; i < limit; i++ {
-		r := results[i]
-		var content string
-		hit := false
+		wg.Add(1)
+		go func(i int, r search.Result) {
+			defer wg.Done()
 
-		if cached, ok := cache.Get(r.URL); ok {
-			content = cached
-			hit = true
-			cacheHits++
-		} else {
-			content, err = fetch.Fetch(r.URL)
-			if err != nil {
-				continue
+			var content string
+			var hit bool
+
+			if cached, ok := cache.Get(r.URL); ok {
+				content = cached
+				hit = true
+				cacheHits.Add(1)
+			} else {
+				var fetchErr error
+				content, fetchErr = fetch.Fetch(r.URL)
+				if fetchErr != nil {
+					return
+				}
+				_ = cache.Set(r.URL, content)
 			}
-			_ = cache.Set(r.URL, content)
-		}
 
-		var summary string
-		switch resolvedMode(req.Mode) {
-		case "lossless":
-			summary = content
-		case "chunks":
-			summary = retrieve.TopKJoined(content, focus, resolvedTopK(req.TopK))
-		default:
-			var sumErr error
-			summary, sumErr = summarize.Summarize(ctx, content, focus, summarize.Options{
-				Provider: req.Provider,
-				Model:    req.Model,
-			})
-			if sumErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing truncated content\n", sumErr)
-				summary = truncate(content, summarize.MaxFallbackChars)
+			var summary string
+			switch resolvedMode(req.Mode) {
+			case "lossless":
+				summary = content
+			case "chunks":
+				summary = retrieve.TopKJoined(content, focus, resolvedTopK(req.TopK))
+			default:
+				var sumErr error
+				summary, sumErr = summarize.Summarize(ctx, content, focus, summarize.Options{
+					Provider: req.Provider,
+					Model:    req.Model,
+				})
+				if sumErr != nil {
+					fmt.Fprintf(os.Stderr, "warning: summarizer failed (%v); showing truncated content\n", sumErr)
+					summary = truncate(content, summarize.MaxFallbackChars)
+				}
 			}
-		}
 
-		sources = append(sources, SourceSummary{
-			Title:    r.Title,
-			URL:      r.URL,
-			Summary:  summary,
-			CacheHit: hit,
-		})
-		summaries = append(summaries, fmt.Sprintf("Source: %s\n%s", r.URL, summary))
+			pageResults[i] = pageResult{
+				source: SourceSummary{
+					Title:    r.Title,
+					URL:      r.URL,
+					Summary:  summary,
+					CacheHit: hit,
+				},
+				summary: fmt.Sprintf("Source: %s\n%s", r.URL, summary),
+				ok:      true,
+			}
+		}(i, results[i])
+	}
+
+	wg.Wait()
+
+	sources := make([]SourceSummary, 0, limit)
+	var summaries []string
+	for _, pr := range pageResults {
+		if pr.ok {
+			sources = append(sources, pr.source)
+			summaries = append(summaries, pr.summary)
+		}
 	}
 
 	combined := strings.Join(summaries, "\n\n---\n\n")
@@ -199,7 +226,7 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 		Stats: ResearchStats{
 			SearchedResults: len(results),
 			FetchedPages:    len(sources),
-			CacheHits:       cacheHits,
+			CacheHits:       int(cacheHits.Load()),
 		},
 	}, nil
 }
