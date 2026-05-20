@@ -1,0 +1,176 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      skipped: ${{ steps.tag.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next semver tag
+        id: tag
+        run: |
+          # Find latest semver tag, default to v0.0.0
+          LATEST=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+          LATEST=${LATEST:-v0.0.0}
+
+          MAJOR=$(echo "$LATEST" | cut -d. -f1 | tr -d v)
+          MINOR=$(echo "$LATEST" | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | cut -d. -f3)
+
+          # Collect commits since last tag
+          COMMITS=$(git log "${LATEST}..HEAD" --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+          BUMP=none
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -qE '^(feat|fix|refactor|perf)(\(.+\))?!:'; then
+              BUMP=major; break
+            elif echo "$msg" | grep -qE '^feat(\(.+\))?:'; then
+              [ "$BUMP" != "major" ] && BUMP=minor
+            elif echo "$msg" | grep -qE '^(fix|refactor|perf)(\(.+\))?:'; then
+              [ "$BUMP" = "none" ] && BUMP=patch
+            fi
+          done <<< "$COMMITS"
+
+          if [ "$BUMP" = "none" ]; then
+            echo "No releasable commits since $LATEST — skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+          esac
+
+          TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+          echo "Bumping $LATEST → $TAG ($BUMP)"
+
+      - name: Create and push tag
+        if: steps.tag.outputs.skipped == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.tag.outputs.tag }}"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+  build:
+    needs: release
+    if: needs.release.outputs.skipped == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
+      - name: Build binaries
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          TAG=${{ needs.release.outputs.tag }}
+          go build -ldflags="-s -w -X main.version=${TAG}" \
+            -o "wr-${{ matrix.suffix }}${{ matrix.ext || '' }}" ./cmd/wr
+          go build -ldflags="-s -w -X main.version=${TAG}" \
+            -o "wr-mcp-${{ matrix.suffix }}${{ matrix.ext || '' }}" ./cmd/wr-mcp
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.suffix }}
+          path: |
+            wr-${{ matrix.suffix }}${{ matrix.ext || '' }}
+            wr-mcp-${{ matrix.suffix }}${{ matrix.ext || '' }}
+
+  publish:
+    needs: [release, build]
+    if: needs.release.outputs.skipped == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          LATEST_BEFORE=$(git tag --list 'v*.*.*' --sort=-version:refname | grep -v "^${{ needs.release.outputs.tag }}$" | head -1)
+          if [ -n "$LATEST_BEFORE" ]; then
+            NOTES=$(git log "${LATEST_BEFORE}..HEAD" --pretty=format:"- %s" | grep -E '^- (feat|fix|refactor|perf)')
+          else
+            NOTES=$(git log --pretty=format:"- %s" | grep -E '^- (feat|fix|refactor|perf)')
+          fi
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          name: ${{ needs.release.outputs.tag }}
+          body: |
+            ## Changes
+            ${{ steps.notes.outputs.notes }}
+
+            ## Install
+
+            **macOS (Apple Silicon)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ needs.release.outputs.tag }}/wr-darwin-arm64 -o wr && chmod +x wr
+            ```
+
+            **macOS (Intel)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ needs.release.outputs.tag }}/wr-darwin-amd64 -o wr && chmod +x wr
+            ```
+
+            **Linux (amd64)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ needs.release.outputs.tag }}/wr-linux-amd64 -o wr && chmod +x wr
+            ```
+          files: dist/*
+          fail_on_unmatched_files: true
