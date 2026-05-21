@@ -2,6 +2,31 @@ package research
 
 import "testing"
 
+func TestStripListPrefix(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"1. stripe webhook idempotency", "stripe webhook idempotency"},
+		{"2. golang concurrency", "golang concurrency"},
+		{"10. some query", "some query"},
+		{"1) stripe webhook", "stripe webhook"},
+		{"2) another query", "another query"},
+		{"- stripe webhooks", "stripe webhooks"},
+		{"* golang channels", "golang channels"},
+		{"• bullet query", "bullet query"},
+		{"no prefix query", "no prefix query"},
+		{"1.not a prefix", "1.not a prefix"}, // no space after dot
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := stripListPrefix(tt.in); got != tt.want {
+				t.Errorf("stripListPrefix(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseSubQueries(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -44,6 +69,18 @@ func TestParseSubQueries(t *testing.T) {
 			raw:      "single query",
 			fallback: "fallback",
 			want:     []string{"single query"},
+		},
+		{
+			name:     "numbered LLM output stripped",
+			raw:      "1. stripe webhook idempotency\n2. stripe retry handling\n3. stripe idempotency key",
+			fallback: "stripe",
+			want:     []string{"stripe webhook idempotency", "stripe retry handling", "stripe idempotency key"},
+		},
+		{
+			name:     "bulleted LLM output stripped",
+			raw:      "- golang concurrency\n* goroutine patterns\n• channel usage",
+			fallback: "golang",
+			want:     []string{"golang concurrency", "goroutine patterns", "channel usage"},
 		},
 	}
 	for _, tt := range tests {

@@ -150,7 +150,13 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 		}
 	}
 	if len(results) == 0 {
-		return nil, fmt.Errorf("search failed: all sub-queries returned errors")
+		errs := make([]string, 0, len(searchOuts))
+		for i, so := range searchOuts {
+			if so.err != nil {
+				errs = append(errs, fmt.Sprintf("%q: %v", subQueries[i], so.err))
+			}
+		}
+		return nil, fmt.Errorf("search failed: %s", strings.Join(errs, "; "))
 	}
 
 	limit := req.MaxResults
