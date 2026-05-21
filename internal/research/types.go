@@ -58,10 +58,11 @@ type ResearchStats struct {
 }
 
 type ResearchResponse struct {
-	Query   string          `json:"query"`
-	Answer  string          `json:"answer"`
-	Sources []SourceSummary `json:"sources"`
-	Stats   ResearchStats   `json:"stats"`
+	Query      string          `json:"query"`
+	SubQueries []string        `json:"sub_queries,omitempty"`
+	Answer     string          `json:"answer"`
+	Sources    []SourceSummary `json:"sources"`
+	Stats      ResearchStats   `json:"stats"`
 }
 
 type TokenStats struct {

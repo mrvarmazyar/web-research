@@ -115,9 +115,48 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 		req.MaxResults = defaultMaxResults
 	}
 
-	results, err := search.Search(req.Query)
-	if err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
+	subQueries := generateSubQueries(ctx, req.Query, summarize.Options{
+		Provider: req.Provider,
+		Model:    req.Model,
+	})
+
+	type searchOut struct {
+		results []search.Result
+		err     error
+	}
+	searchOuts := make([]searchOut, len(subQueries))
+	var swg sync.WaitGroup
+	for i, q := range subQueries {
+		swg.Add(1)
+		go func(i int, q string) {
+			defer swg.Done()
+			r, err := search.Search(q)
+			searchOuts[i] = searchOut{r, err}
+		}(i, q)
+	}
+	swg.Wait()
+
+	seen := make(map[string]bool)
+	var results []search.Result
+	for _, so := range searchOuts {
+		if so.err != nil {
+			continue
+		}
+		for _, r := range so.results {
+			if !seen[r.URL] {
+				seen[r.URL] = true
+				results = append(results, r)
+			}
+		}
+	}
+	if len(results) == 0 {
+		errs := make([]string, 0, len(searchOuts))
+		for i, so := range searchOuts {
+			if so.err != nil {
+				errs = append(errs, fmt.Sprintf("%q: %v", subQueries[i], so.err))
+			}
+		}
+		return nil, fmt.Errorf("search failed: %s", strings.Join(errs, "; "))
 	}
 
 	limit := req.MaxResults
@@ -220,9 +259,10 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 	}
 
 	return &ResearchResponse{
-		Query:   req.Query,
-		Answer:  answer,
-		Sources: sources,
+		Query:      req.Query,
+		SubQueries: subQueries,
+		Answer:     answer,
+		Sources:    sources,
 		Stats: ResearchStats{
 			SearchedResults: len(results),
 			FetchedPages:    len(sources),
