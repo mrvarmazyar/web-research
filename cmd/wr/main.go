@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
@@ -76,8 +77,11 @@ func cmdFetch(url, prompt string, opts summaryOptions) {
 }
 
 func cmdResearch(query string, opts summaryOptions) {
+	var mu sync.Mutex
 	ctx := research.WithProgress(context.Background(), func(msg string) {
+		mu.Lock()
 		fmt.Fprintf(os.Stderr, "→ %s\n", msg)
+		mu.Unlock()
 	})
 	resp, err := svc.Research(ctx, research.ResearchRequest{
 		Query:    query,
