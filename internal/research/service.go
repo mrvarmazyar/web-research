@@ -115,10 +115,12 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 		req.MaxResults = defaultMaxResults
 	}
 
+	reportProgress(ctx, "decomposing query...")
 	subQueries := generateSubQueries(ctx, req.Query, summarize.Options{
 		Provider: req.Provider,
 		Model:    req.Model,
 	})
+	reportProgress(ctx, fmt.Sprintf("searching [%d queries]: %s", len(subQueries), strings.Join(subQueries, " | ")))
 
 	type searchOut struct {
 		results []search.Result
@@ -191,6 +193,7 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 				content = cached
 				hit = true
 				cacheHits.Add(1)
+				reportProgress(ctx, "cache hit: "+r.URL)
 			} else {
 				var fetchErr error
 				content, fetchErr = fetch.Fetch(r.URL)
@@ -198,6 +201,7 @@ func (s *Service) Research(ctx context.Context, req ResearchRequest) (*ResearchR
 					return
 				}
 				_ = cache.Set(r.URL, content)
+				reportProgress(ctx, "fetched: "+r.URL)
 			}
 
 			var summary string

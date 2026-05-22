@@ -76,7 +76,10 @@ func cmdFetch(url, prompt string, opts summaryOptions) {
 }
 
 func cmdResearch(query string, opts summaryOptions) {
-	resp, err := svc.Research(context.Background(), research.ResearchRequest{
+	ctx := research.WithProgress(context.Background(), func(msg string) {
+		fmt.Fprintf(os.Stderr, "→ %s\n", msg)
+	})
+	resp, err := svc.Research(ctx, research.ResearchRequest{
 		Query:    query,
 		Provider: opts.Provider,
 		Model:    opts.Model,
@@ -86,9 +89,7 @@ func cmdResearch(query string, opts summaryOptions) {
 	if err != nil {
 		fatalf("research: %v", err)
 	}
-
-	fmt.Fprintf(os.Stderr, "→ searched [%d queries]: %s\n\n",
-		len(resp.SubQueries), strings.Join(resp.SubQueries, " | "))
+	fmt.Fprintln(os.Stderr)
 
 	fmt.Println(resp.Answer)
 	fmt.Printf("\n## Sources (%d fetched, %d cache hits)\n", resp.Stats.FetchedPages, resp.Stats.CacheHits)
