@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mrvarmazyar/web-research/internal/cache"
@@ -76,7 +77,13 @@ func cmdFetch(url, prompt string, opts summaryOptions) {
 }
 
 func cmdResearch(query string, opts summaryOptions) {
-	resp, err := svc.Research(context.Background(), research.ResearchRequest{
+	var mu sync.Mutex
+	ctx := research.WithProgress(context.Background(), func(msg string) {
+		mu.Lock()
+		fmt.Fprintf(os.Stderr, "→ %s\n", msg)
+		mu.Unlock()
+	})
+	resp, err := svc.Research(ctx, research.ResearchRequest{
 		Query:    query,
 		Provider: opts.Provider,
 		Model:    opts.Model,
@@ -86,9 +93,7 @@ func cmdResearch(query string, opts summaryOptions) {
 	if err != nil {
 		fatalf("research: %v", err)
 	}
-
-	fmt.Fprintf(os.Stderr, "→ searched [%d queries]: %s\n\n",
-		len(resp.SubQueries), strings.Join(resp.SubQueries, " | "))
+	fmt.Fprintln(os.Stderr)
 
 	fmt.Println(resp.Answer)
 	fmt.Printf("\n## Sources (%d fetched, %d cache hits)\n", resp.Stats.FetchedPages, resp.Stats.CacheHits)
