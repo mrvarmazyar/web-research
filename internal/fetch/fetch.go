@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -13,8 +14,9 @@ import (
 const (
 	maxBytes        = 2 * 1024 * 1024 // 2MB
 	minContentChars = 500              // below this, assume JS-rendered page and try Jina
-	jinaBase        = "https://r.jina.ai/"
 )
+
+var jinaBase = "https://r.jina.ai/"
 
 var client = &http.Client{Timeout: 30 * time.Second}
 
@@ -24,10 +26,11 @@ var client = &http.Client{Timeout: 30 * time.Second}
 func Fetch(rawURL string) (string, error) {
 	content, err := fetchDirect(rawURL)
 	if err != nil {
-		if jina, jinaErr := fetchJina(rawURL); jinaErr == nil {
+		jina, jinaErr := fetchJina(rawURL)
+		if jinaErr == nil {
 			return jina, nil
 		}
-		return "", err
+		return "", fmt.Errorf("direct fetch failed: %w; jina fallback failed: %v", err, jinaErr)
 	}
 
 	if len(strings.TrimSpace(content)) < minContentChars {
@@ -71,8 +74,27 @@ func fetchDirect(rawURL string) (string, error) {
 	return markdown, nil
 }
 
+func jinaURL(rawURL string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("unsupported URL scheme %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("URL missing host")
+	}
+	return jinaBase + rawURL, nil
+}
+
 func fetchJina(rawURL string) (string, error) {
-	req, err := http.NewRequest("GET", jinaBase+rawURL, nil)
+	readerURL, err := jinaURL(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, readerURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -85,8 +107,10 @@ func fetchJina(rawURL string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("jina HTTP %d for %s", resp.StatusCode, rawURL)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("jina HTTP %d for %s: %s",
+			resp.StatusCode, rawURL, strings.TrimSpace(string(body)))
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
