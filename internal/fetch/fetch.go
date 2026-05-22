@@ -10,11 +10,36 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 )
 
-const maxBytes = 2 * 1024 * 1024 // 2MB
+const (
+	maxBytes        = 2 * 1024 * 1024 // 2MB
+	minContentChars = 500              // below this, assume JS-rendered page and try Jina
+	jinaBase        = "https://r.jina.ai/"
+)
 
 var client = &http.Client{Timeout: 30 * time.Second}
 
+// Fetch retrieves rawURL and returns clean markdown. If the page appears to be
+// JS-rendered (content below minContentChars), it retries via the Jina reader
+// API which executes JS server-side and returns clean markdown directly.
 func Fetch(rawURL string) (string, error) {
+	content, err := fetchDirect(rawURL)
+	if err != nil {
+		if jina, jinaErr := fetchJina(rawURL); jinaErr == nil {
+			return jina, nil
+		}
+		return "", err
+	}
+
+	if len(strings.TrimSpace(content)) < minContentChars {
+		if jina, jinaErr := fetchJina(rawURL); jinaErr == nil && len(jina) > len(content) {
+			return jina, nil
+		}
+	}
+
+	return content, nil
+}
+
+func fetchDirect(rawURL string) (string, error) {
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return "", err
@@ -44,6 +69,32 @@ func Fetch(rawURL string) (string, error) {
 	}
 
 	return markdown, nil
+}
+
+func fetchJina(rawURL string) (string, error) {
+	req, err := http.NewRequest("GET", jinaBase+rawURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "text/markdown")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; web-research/1.0)")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("jina fetch failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("jina HTTP %d for %s", resp.StatusCode, rawURL)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
+	if err != nil {
+		return "", fmt.Errorf("jina read failed: %w", err)
+	}
+
+	return strings.TrimSpace(string(body)), nil
 }
 
 func stripTags(html string) string {
