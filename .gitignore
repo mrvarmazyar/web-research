@@ -2,3 +2,4 @@
 /wr-mcp
 dist/
 *.exe
+.worktrees/
