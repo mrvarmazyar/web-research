@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	md "github.com/JohannesKaufmann/html-to-markdown"
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
 
 const (
@@ -65,8 +65,7 @@ func fetchDirect(rawURL string) (string, error) {
 		return "", fmt.Errorf("read failed: %w", err)
 	}
 
-	converter := md.NewConverter("", true, nil)
-	markdown, err := converter.ConvertString(string(body))
+	markdown, err := htmltomarkdown.ConvertString(string(body))
 	if err != nil {
 		return stripTags(string(body)), nil
 	}
